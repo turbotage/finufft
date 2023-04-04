@@ -51,16 +51,18 @@ set_target_properties(
   LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
 
-add_library(cufinufft_static STATIC
-  $<TARGET_OBJECTS:cufinufft_common_objects>
-  $<TARGET_OBJECTS:cufinufft_32_objects>
-  $<TARGET_OBJECTS:cufinufft_64_objects>
-)
-target_link_libraries(cufinufft_static PUBLIC CUDA::cudart_static CUDA::cufft_static CUDA::nvToolsExt)
-set_target_properties(
-  cufinufft_static PROPERTIES
-  ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
-)
+if(FINUFFT_BUILD_STATIC)
+	add_library(cufinufft_static STATIC
+	  $<TARGET_OBJECTS:cufinufft_common_objects>
+	  $<TARGET_OBJECTS:cufinufft_32_objects>
+	  $<TARGET_OBJECTS:cufinufft_64_objects>
+	)
+	target_link_libraries(cufinufft_static PUBLIC CUDA::cudart_static CUDA::cufft_static CUDA::nvToolsExt)
+	set_target_properties(
+	  cufinufft_static PROPERTIES
+	  ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+	)
+endif()
 
 # if(FINUFFT_BUILD_TESTS)
 # add_subdirectory(test)

@@ -26,6 +26,9 @@ option(FINUFFT_USE_OPENMP "Whether to use OpenMP for parallelization. If disable
 option(FINUFFT_USE_CUDA "Whether to build CUDA accelerated FINUFFT library (libcufinufft). This is completely independent of the main FINUFFT library" OFF)
 # sphinx tag (don't remove): @cmake_opts_end
 
+option(FINUFFT_BUILD_STATIC "Wheter to also build static libs" OFF)
+
+
 set(CPM_DOWNLOAD_VERSION 0.38.0)
 include(cmake/setupCPM.cmake)
 
@@ -135,14 +138,18 @@ if(NOT WIN32)
 endif()
 target_include_directories(finufft PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
-add_library(finufft_static STATIC src/utils_precindep.cpp contrib/legendre_rule_fast.cpp)
-set_finufft_options(finufft)
-target_link_libraries(finufft_static PUBLIC finufft_f32 finufft_f64)
-# windows does not have a math library, so we need to exclude it
-if(NOT WIN32)
-    target_link_libraries(finufft_static PUBLIC m)
+if (FINUFFT_BUILD_STATIC)
+    message("Building static finufft")
+    add_library(finufft_static STATIC src/utils_precindep.cpp contrib/legendre_rule_fast.cpp)
+    set_finufft_options(finufft)
+    target_link_libraries(finufft_static PUBLIC finufft_f32 finufft_f64)
+    # windows does not have a math library, so we need to exclude it
+    if(NOT WIN32)
+        target_link_libraries(finufft_static PUBLIC m)
+    endif()
+    target_include_directories(finufft_static PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 endif()
-target_include_directories(finufft_static PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+
 
 if(FINUFFT_USE_CUDA)
   if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
