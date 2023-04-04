@@ -1,6 +1,7 @@
 #include <cstdio>
 
-#include <nvToolsExt.h>
+//#include <nvToolsExt.h>
+#include <nvtx3/nvToolsExt.h>
 
 #include <cufinufft/profile.h>
 
