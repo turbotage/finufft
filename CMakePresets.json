@@ -1,11 +1,112 @@
 {
-  "version": 2,
+  "version": 5,
   "cmakeMinimumRequired": {
     "major": 3,
-    "minor": 19,
+    "minor": 26,
     "patch": 0
   },
   "configurePresets": [
+    {
+      "name": "windows-base",
+      "description": "Target Windows with the Visual Studio development environment.",
+      "hidden": true,
+      "generator": "Visual Studio 17 2022",
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "installDir": "${sourceDir}/out/install/${presetName}",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "cl.exe",
+        "CMAKE_CXX_COMPILER": "cl.exe"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "cmakeExecutable": "C:\\Program Files\\CMake\\bin\\cmake.exe"
+    },
+    // Windows MSVC Debug CUDA
+    {
+      "name": "msvc-x64-debug",
+      "displayName": "MSVC x64 Debug CUDA",
+      "description": "Target Windows Visual Studio Env(64-bit) - build with CUDA. (Debug)",
+      "inherits": "windows-base",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "FINUFFT_USE_CUDA": {
+          "type": "BOOL",
+          "value": "ON"
+        },
+        "CUDAToolkit_ROOT": {
+          "type": "FILEPATH",
+          "value": "$env{CUDA_ROOT}"
+        },
+        "CMAKE_CUDA_ARCHITECTURES": {
+          "type": "STRING",
+          "value": "60;75;89"
+        },
+        "CMAKE_VERBOSE_MAKEFILE": {
+          "type": "BOOL",
+          "value": "ON"
+        }
+      }
+    },
+    // Windows MSVC Release CUDA
+    {
+      "name": "msvc-x64-release",
+      "displayName": "MSVC x64 Release CUDA",
+      "description": "Target Windows Visual Studio Env(64-bit) - build with CUDA. (Release)",
+      "inherits": "windows-base",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "FINUFFT_USE_CUDA": {
+          "type": "BOOL",
+          "value": "ON"
+        },
+        "CUDAToolkit_ROOT": {
+          "type": "FILEPATH",
+          "value": "$env{CUDA_ROOT}"
+        },
+        "CMAKE_CUDA_ARCHITECTURES": {
+          "type": "STRING",
+          "value": "60;75;89"
+        },
+        "CMAKE_VERBOSE_MAKEFILE": {
+          "type": "BOOL",
+          "value": "ON"
+        }
+      }
+    },
+    {
+      "name": "msvc-default",
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "installDir": "${sourceDir}/out/install/${presetName}",
+      "displayName": "MSVC Default",
+      "description": "Default release configuration (ninja)",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "FINUFFT_USE_CUDA": {
+          "type": "BOOL",
+          "value": "ON"
+        },
+        "CMAKE_CUDA_ARCHITECTURES": {
+          "type": "STRING",
+          "value": "60;75;89"
+        },
+        "CMAKE_VERBOSE_MAKEFILE": {
+          "type": "BOOL",
+          "value": "OFF"
+        }
+      }
+    },
     {
       "name": "default",
       "binaryDir": "build/default",
@@ -13,7 +114,7 @@
       "description": "Default release configuration (ninja)",
       "generator": "Ninja",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
       }
     },
     {
@@ -82,6 +183,10 @@
     }
   ],
   "buildPresets": [
+    {
+      "name": "msvc-default",
+      "configurePreset": "msvc-default"
+    },
     {
       "name": "default",
       "configurePreset": "default"

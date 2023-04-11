@@ -7,7 +7,11 @@
 #include <cuComplex.h>
 #include <cufinufft_types.h>
 
+#ifdef _WIN32
+#include "windows/sys/time.h"
+#else
 #include <sys/time.h>
+#endif
 
 namespace cufinufft {
 namespace utils {
