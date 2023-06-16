@@ -114,7 +114,7 @@
       "description": "Default release configuration (ninja)",
       "generator": "Ninja",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_BUILD_TYPE": "Release"
       }
     },
     {
