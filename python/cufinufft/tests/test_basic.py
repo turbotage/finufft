@@ -1,131 +1,120 @@
+import pytest
+
 import numpy as np
 
-import pycuda.autoinit # NOQA:401
-import pycuda.gpuarray as gpuarray
-
-from cufinufft import cufinufft
+from cufinufft import Plan, _compat
 
 import utils
 
+# NOTE: Tests below fail for tolerance 1e-4 (error executing plan).
 
-def _test_type1(dtype, shape=(16, 16, 16), M=4096, tol=1e-3):
+DTYPES = [np.float32, np.float64]
+SHAPES = [(16,), (16, 16), (16, 16, 16)]
+MS = [256, 1024, 4096]
+TOLS = [1e-2, 1e-3]
+OUTPUT_ARGS = [False, True]
+CONTIGUOUS = [False, True]
+
+
+@pytest.mark.parametrize("dtype", DTYPES)
+@pytest.mark.parametrize("shape", SHAPES)
+@pytest.mark.parametrize("M", MS)
+@pytest.mark.parametrize("tol", TOLS)
+@pytest.mark.parametrize("output_arg", OUTPUT_ARGS)
+def test_type1(to_gpu, to_cpu, dtype, shape, M, tol, output_arg):
     complex_dtype = utils._complex_dtype(dtype)
 
-    dim = len(shape)
+    k, c = utils.type1_problem(dtype, shape, M)
 
-    k = utils.gen_nu_pts(M, dim=dim).astype(dtype)
-    c = utils.gen_nonuniform_data(M).astype(complex_dtype)
+    k_gpu = to_gpu(k)
+    c_gpu = to_gpu(c)
 
-    k_gpu = gpuarray.to_gpu(k)
-    c_gpu = gpuarray.to_gpu(c)
-    fk_gpu = gpuarray.GPUArray(shape, dtype=complex_dtype)
+    plan = Plan(1, shape, eps=tol, dtype=complex_dtype)
 
-    plan = cufinufft(1, shape, eps=tol, dtype=dtype)
+    # Since k_gpu is an array of shape (dim, M), this will expand to
+    # plan.setpts(k_gpu[0], ..., k_gpu[dim]), allowing us to handle all
+    # dimensions with the same call.
+    plan.setpts(*k_gpu)
 
-    plan.set_pts(k_gpu[0], k_gpu[1], k_gpu[2])
+    if output_arg:
+        fk_gpu = _compat.array_empty_like(c_gpu, shape, dtype=complex_dtype)
+        plan.execute(c_gpu, out=fk_gpu)
+    else:
+        fk_gpu = plan.execute(c_gpu)
 
-    plan.execute(c_gpu, fk_gpu)
+    fk = to_cpu(fk_gpu)
 
-    fk = fk_gpu.get()
-
-    ind = int(0.1789 * np.prod(shape))
-
-    fk_est = fk.ravel()[ind]
-    fk_target = utils.direct_type1(c, k, shape, ind)
-
-    type1_rel_err = np.abs(fk_target - fk_est) / np.abs(fk_target)
-
-    print('Type 1 relative error:', type1_rel_err)
-
-    assert type1_rel_err < 0.01
+    utils.verify_type1(k, c, fk, tol)
 
 
-def test_type1_32(shape=(16, 16, 16), M=4096, tol=1e-3):
-    return _test_type1(dtype=np.float32, shape=shape, M=M, tol=tol)
-
-
-def test_type1_64(shape=(16, 16, 16), M=4096, tol=1e-3):
-    return _test_type1(dtype=np.float64, shape=shape, M=M, tol=tol)
-
-
-def _test_type2(dtype, shape=(16, 16, 16), M=4096, tol=1e-3):
+@pytest.mark.parametrize("dtype", DTYPES)
+@pytest.mark.parametrize("shape", SHAPES)
+@pytest.mark.parametrize("M", MS)
+@pytest.mark.parametrize("tol", TOLS)
+@pytest.mark.parametrize("output_arg", OUTPUT_ARGS)
+@pytest.mark.parametrize("contiguous", CONTIGUOUS)
+def test_type2(to_gpu, to_cpu, dtype, shape, M, tol, output_arg, contiguous):
     complex_dtype = utils._complex_dtype(dtype)
 
-    k = utils.gen_nu_pts(M).astype(dtype)
-    fk = utils.gen_uniform_data(shape).astype(complex_dtype)
+    k, fk = utils.type2_problem(dtype, shape, M)
 
-    k_gpu = gpuarray.to_gpu(k)
-    fk_gpu = gpuarray.to_gpu(fk)
+    plan = Plan(2, shape, eps=tol, dtype=complex_dtype)
 
-    c_gpu = gpuarray.GPUArray(shape=(M,), dtype=complex_dtype)
+    check_result = True
 
-    plan = cufinufft(2, shape, eps=tol, dtype=dtype)
+    if not contiguous and len(shape) > 1:
+        fk = fk.copy(order="F")
 
-    plan.set_pts(k_gpu[0], k_gpu[1], k_gpu[2])
+        if _compat.array_can_contiguous(to_gpu(np.empty(1))):
+            def _execute(*args, **kwargs):
+                with pytest.warns(UserWarning, match="requirement: C. Copying"):
+                    return plan.execute(*args, **kwargs)
+        else:
+            check_result = False
 
-    plan.execute(c_gpu, fk_gpu)
+            def _execute(*args, **kwargs):
+                with pytest.raises(TypeError, match="requirement: C"):
+                    plan.execute(*args, **kwargs)
 
-    c = c_gpu.get()
+    else:
+        def _execute(*args, **kwargs):
+            return plan.execute(*args, **kwargs)
 
-    ind = M // 2
+    k_gpu = to_gpu(k)
+    fk_gpu = to_gpu(fk)
 
-    c_est = c[ind]
-    c_target = utils.direct_type2(fk, k[:, ind])
+    plan.setpts(*k_gpu)
 
-    type2_rel_err = np.abs(c_target - c_est) / np.abs(c_target)
+    if output_arg:
+        c_gpu = _compat.array_empty_like(fk_gpu, (M,), dtype=complex_dtype)
+        _execute(fk_gpu, out=c_gpu)
+    else:
+        c_gpu = _execute(fk_gpu)
 
-    print('Type 2 relative error:', type2_rel_err)
+    if check_result:
+        c = to_cpu(c_gpu)
 
-    assert type2_rel_err < 0.01
-
-
-def test_type2_32(shape=(16, 16, 16), M=4096, tol=1e-3):
-    return _test_type2(dtype=np.float32, shape=shape, M=M, tol=tol)
-
-
-def test_type2_64(shape=(16, 16, 16), M=4096, tol=1e-3):
-    return _test_type2(dtype=np.float64, shape=shape, M=M, tol=tol)
+        utils.verify_type2(k, fk, c, tol)
 
 
-def test_opts(shape=(8, 8, 8), M=32, tol=1e-3):
+def test_opts(to_gpu, to_cpu, shape=(8, 8, 8), M=32, tol=1e-3):
     dtype = np.float32
 
     complex_dtype = utils._complex_dtype(dtype)
 
-    dim = len(shape)
+    k, c = utils.type1_problem(dtype, shape, M)
 
-    k = utils.gen_nu_pts(M, dim=dim).astype(dtype)
-    c = utils.gen_nonuniform_data(M).astype(complex_dtype)
+    k_gpu = to_gpu(k)
+    c_gpu = to_gpu(c)
+    fk_gpu = _compat.array_empty_like(c_gpu, shape, dtype=complex_dtype)
 
-    k_gpu = gpuarray.to_gpu(k)
-    c_gpu = gpuarray.to_gpu(c)
-    fk_gpu = gpuarray.GPUArray(shape, dtype=complex_dtype)
-
-    plan = cufinufft(1, shape, eps=tol, dtype=dtype, gpu_sort=False,
+    plan = Plan(1, shape, eps=tol, dtype=complex_dtype, gpu_sort=False,
                      gpu_maxsubprobsize=10)
 
-    plan.set_pts(k_gpu[0], k_gpu[1], k_gpu[2])
+    plan.setpts(k_gpu[0], k_gpu[1], k_gpu[2])
 
     plan.execute(c_gpu, fk_gpu)
 
-    fk = fk_gpu.get()
+    fk = to_cpu(fk_gpu)
 
-    ind = int(0.1789 * np.prod(shape))
-
-    fk_est = fk.ravel()[ind]
-    fk_target = utils.direct_type1(c, k, shape, ind)
-
-    type1_rel_err = np.abs(fk_target - fk_est) / np.abs(fk_target)
-
-    assert type1_rel_err < 0.01
-
-
-def main():
-    test_type1_32()
-    test_type2_32()
-    test_type1_64()
-    test_type2_64()
-
-
-if __name__ == '__main__':
-    main()
+    utils.verify_type1(k, c, fk, tol)

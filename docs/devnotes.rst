@@ -9,8 +9,10 @@ Developer notes
 
   - ``CMakeLists.txt`` for cmake
   - ``docs/conf.py`` for sphinx
-  - ``python/setup.py`` for the python pkg version
-  - ``python/finufft/__init__.py``
+  - ``python/finufft/setup.py`` for the python pkg version
+  - ``python/finufft/__init__.py`` ditto
+  - ``python/cufinufft/setup.py`` for the GPU python pkg version
+  - ``python/cufinufft/__init__.py`` ditto
   - ``include/finufft/defs.h`` for the debug>0 output
   - ``matlab/Contents.m`` for the MATLAB/Octave help
   - ``CHANGELOG``: don't forget to describe the new features and changes, folding lines at 80 chars.
@@ -28,11 +30,13 @@ Developer notes
   is a very useful MEX interface generator by Dave Bindel, now maintained
   and expanded by Zydrunas Gimbutas.
   Make sure you have ``flex`` and ``bison`` installed to build it.
-  As of FINUFFT v.2.0 you will need a recent (>=0.33.10) version of MWrap.
+  As of FINUFFT v2.0 you will need a recent (>=0.33.10) version of MWrap.
   Make sure to override the location of MWrap by adding a line such as::
 
     MWRAP = your-path-to-mwrap-executable
   
   to your ``make.inc``, and then you can use the ``make mex`` task.
+
+* The cufinufft Python wheels are generated using Docker based on the manylinux2014 image. For instructions, see ``tools/cufinufft/distribution_helper.sh``. These are binary wheels that are built using CUDA 11 (or optionally CUDA 12, but these are not distributed on PyPI) and bundled with the necessary libraries.
 
 
