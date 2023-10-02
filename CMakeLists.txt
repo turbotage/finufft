@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 3.19)
 
 project(finufft VERSION 2.2.0 LANGUAGES C CXX)
 
+if (MSVC)
+    set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
+
 set(GNU_LIKE_FRONTENDS AppleClang Clang GNU)
 if(CMAKE_CXX_COMPILER_ID IN_LIST GNU_LIKE_FRONTENDS)
     # Set custom compiler flags for gcc-compatible compilers
@@ -96,7 +100,10 @@ function(set_finufft_options target)
         target_compile_options(${target} PRIVATE $<$<CONFIG:Release,RelWithDebInfo>:-fcx-limited-range>)
     endif ()
 
-    target_include_directories(${target} PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+    target_include_directories(${target} PUBLIC 
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>
+		$<INSTALL_INTERFACE:include>
+	)
     if (FINUFFT_USE_OPENMP)
         target_link_libraries(${target} PRIVATE OpenMP::OpenMP_CXX)
         # there are issues on windows with OpenMP and CMake, so we need to manually add the flags
@@ -119,7 +126,7 @@ function(set_finufft_options target)
         list (GET FINUFFT_FFTW_LIBRARIES 0 element)
         get_property(FFTW_SOURCE_DIR TARGET ${element} PROPERTY SOURCE_DIR)
         set(FFTW_INCLUDE_DIR ${FFTW_SOURCE_DIR}/api)
-        target_include_directories(${target} PUBLIC ${FFTW_INCLUDE_DIR})
+        target_include_directories(${target} PRIVATE ${FFTW_INCLUDE_DIR})
     endif()
 
 endfunction()
@@ -129,36 +136,48 @@ if(FINUFFT_USE_CPU)
     add_library(finufft_f32 OBJECT ${FINUFFT_PRECISION_DEPENDENT_SOURCES})
     target_compile_definitions(finufft_f32 PRIVATE SINGLE)
     set_finufft_options(finufft_f32)
-    target_link_libraries(finufft_f32 PUBLIC ${FINUFFT_FFTW_LIBRARIES})
+    target_link_libraries(finufft_f32 PRIVATE ${FINUFFT_FFTW_LIBRARIES})
 
     add_library(finufft_f64 OBJECT ${FINUFFT_PRECISION_DEPENDENT_SOURCES})
     set_finufft_options(finufft_f64)
-    target_link_libraries(finufft_f64 PUBLIC ${FINUFFT_FFTW_LIBRARIES})
+    target_link_libraries(finufft_f64 PRIVATE ${FINUFFT_FFTW_LIBRARIES})
 
     add_library(finufft SHARED src/utils_precindep.cpp contrib/legendre_rule_fast.cpp)
     set_finufft_options(finufft)
-    target_link_libraries(finufft PUBLIC finufft_f32 finufft_f64)
+    target_link_libraries(finufft PRIVATE finufft_f32 finufft_f64)
     # windows does not have a math library, so we need to exclude it
     if(NOT WIN32)
         target_link_libraries(finufft PUBLIC m)
     endif()
-    target_include_directories(finufft PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+    target_include_directories(finufft PUBLIC 
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>
+	    $<INSTALL_INTERFACE:include>
+    )
 
-    add_library(finufft_static STATIC src/utils_precindep.cpp contrib/legendre_rule_fast.cpp)
-    set_finufft_options(finufft)
-    target_link_libraries(finufft_static PUBLIC finufft_f32 finufft_f64)
-    # windows does not have a math library, so we need to exclude it
-    if(NOT WIN32)
-        target_link_libraries(finufft_static PUBLIC m)
+    if (FINUFFT_BUILD_STATIC)
+        add_library(finufft_static STATIC src/utils_precindep.cpp contrib/legendre_rule_fast.cpp)
+        set_finufft_options(finufft)
+        target_link_libraries(finufft_static PUBLIC finufft_f32 finufft_f64)
+        # windows does not have a math library, so we need to exclude it
+        if(NOT WIN32)
+            target_link_libraries(finufft_static PUBLIC m)
+        endif()
+        target_include_directories(finufft_static PUBLIC 
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>
+	        $<INSTALL_INTERFACE:include>
+        )
     endif()
-    target_include_directories(finufft_static PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 endif()
 
 if(FINUFFT_USE_CUDA)
+  if (MSVC)
+    add_definitions(-D_USE_MATH_DEFINES)
+  endif()
+
   if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
     message("FINUFFT WARNING: No CUDA architecture supplied via '-DCMAKE_CUDA_ARCHITECTURES=...', defaulting to '60;70;75;'")
     message("See: https://developer.nvidia.com/cuda-gpus for more details on what architecture to supply.")
-    set(CMAKE_CUDA_ARCHITECTURES "60;70;75" CACHE STRING "" FORCE)
+    set(CMAKE_CUDA_ARCHITECTURES "60;70;75;89" CACHE STRING "" FORCE)
   endif()
   enable_language(CUDA)
   find_package(CUDAToolkit REQUIRED)
@@ -190,3 +209,56 @@ endif ()
 if (FINUFFT_BUILD_MATLAB)
     add_subdirectory(matlab)
 endif ()
+
+install(TARGETS finufft
+	EXPORT finufft-targets
+	RUNTIME DESTINATION bin
+	LIBRARY DESTINATION lib
+	ARCHIVE DESTINATION lib
+	INCLUDES DESTINATION include
+)
+
+install(TARGETS cufinufft 
+	EXPORT finufft-targets
+	RUNTIME DESTINATION bin
+	LIBRARY DESTINATION lib
+	ARCHIVE DESTINATION lib
+	INCLUDES DESTINATION include
+)
+
+include(CMakePackageConfigHelpers)
+
+# Creates FooConfigVersion.cmake in the build/Foo directory:
+write_basic_package_version_file(
+  "${CMAKE_CURRENT_BINARY_DIR}/finufft/finufftConfigVersion.cmake"
+  VERSION       ${finufft_VERSION}
+  COMPATIBILITY AnyNewerVersion)
+
+
+# Export the targets (change namespace appropriately):
+export(EXPORT    finufft-targets
+       FILE      "${CMAKE_CURRENT_BINARY_DIR}/finufft/finufftTargets.cmake"
+       NAMESPACE FINUFFT::)
+
+# Copy the FooConfig.cmake to the build/Foo directory:
+configure_file(finufftConfig.cmake
+               "${CMAKE_CURRENT_BINARY_DIR}/finufft/finufftConfig.cmake"
+               COPYONLY)
+
+set(ConfigPackageLocation lib/cmake/finufft)
+install(EXPORT      finufft-targets
+        FILE        finufftTargets.cmake
+        NAMESPACE   FINUFFT::
+        DESTINATION ${ConfigPackageLocation})
+
+# This also installs relative to CMAKE_INSTALL_PREFIX:
+install(
+  FILES       finufftConfig.cmake
+              "${CMAKE_CURRENT_BINARY_DIR}/finufft/finufftConfigVersion.cmake"
+  DESTINATION ${ConfigPackageLocation})
+
+# This is for the source files, change location appropriately:
+install(DIRECTORY ${finufft_SOURCE_DIR}/include DESTINATION ${CMAKE_INSTALL_PREFIX})
+
+message("Interface Include Dirs: ${INTERFACE_INCLUDE_DIRECTORIES}")
+

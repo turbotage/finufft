@@ -91,12 +91,17 @@
       "displayName": "MSVC Default",
       "description": "Default release configuration (ninja)",
       "generator": "Ninja",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "FINUFFT_USE_CUDA": {
           "type": "BOOL",
           "value": "ON"
         },
+        "FINUFFT_BUILD_STATIC": "OFF",
         "CMAKE_CUDA_ARCHITECTURES": {
           "type": "STRING",
           "value": "60;75;89"
@@ -122,7 +127,22 @@
       "binaryDir": "build/ninja",
       "displayName": "Ninja Multi-config",
       "description": "Multi-configuration build with ninja",
-      "generator": "Ninja Multi-Config"
+      "generator": "Ninja Multi-Config",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "FINUFFT_USE_CUDA": {
+          "type": "BOOL",
+          "value": "ON"
+        },
+        "CMAKE_CUDA_ARCHITECTURES": {
+          "type": "STRING",
+          "value": "60;75;89"
+        },
+        "CMAKE_VERBOSE_MAKEFILE": {
+          "type": "BOOL",
+          "value": "OFF"
+        }
+      }
     },
     {
       "name": "dev",
