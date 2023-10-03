@@ -34,6 +34,18 @@ __inline__ __device__ double atomicAdd(double *address, double val) {
 
 namespace cufinufft {
 namespace utils {
+class WithCudaDevice {
+  public:
+    WithCudaDevice(int device) {
+        cudaGetDevice(&orig_device_);
+        cudaSetDevice(device);
+    }
+
+    ~WithCudaDevice() { cudaSetDevice(orig_device_); }
+
+  private:
+    int orig_device_;
+};
 
 // jfm timer class
 class CNTime {
