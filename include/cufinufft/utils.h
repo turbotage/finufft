@@ -8,6 +8,8 @@
 #include <cuComplex.h>
 #include <cufinufft/types.h>
 
+#include <cuda_runtime.h>
+
 #ifdef _WIN32
 #include "windows/sys/time.h"
 #else
